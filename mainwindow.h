@@ -53,6 +53,8 @@ private slots:
 
     void on_pushButtonSave_clicked();
 
+    void on_pushButtonUndistort_clicked();
+
 private:
     void showImage(Mat pic);
 

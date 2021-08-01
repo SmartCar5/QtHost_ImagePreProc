@@ -6,6 +6,7 @@
 #include <QMessageBox>
 #include <QDebug>
 #include <QFileDialog>
+#include <QInputDialog>
 #include <iostream>
 
 
@@ -564,8 +565,8 @@ void MainWindow::on_pushButtonSave_clicked()
             y_new[i][j] = points_out[i][j].y;
         }
     }
-
-    QString path = QFileDialog::getSaveFileName(this, "choose dst File","D:\\CODE\\","*.*|.dat|.data");
+    ui->progressBar->setValue(10);
+    QString path = QFileDialog::getSaveFileName(this, "choose dst File","D:\\CODE\\");
     QFile file(path);
     file.open(QIODevice::ReadWrite);
     QDataStream stm(&file);
@@ -575,6 +576,7 @@ void MainWindow::on_pushButtonSave_clicked()
         file.write( QString("%1").arg(left_side[i]).toStdString().data(),QString("%1").arg(left_side[i]).toStdString().length());
         if(i!=119) file.write( ",",sizeof (","));
         else file.write( "};\n",sizeof ("};\n"));
+        ui->progressBar->setValue(10+i/12);
     }
     file.write( "uint8_t right_side[120] = {",sizeof("uint8_t right_side[120] = {"));
     for(int i = 0;i<120;i++)
@@ -582,6 +584,7 @@ void MainWindow::on_pushButtonSave_clicked()
         file.write( QString("%1").arg(right_side[i]).toStdString().data(),QString("%1").arg(right_side[i]).toStdString().length());
         if(i!=119) file.write( ",",sizeof (","));
         else file.write( "};\n",sizeof("};\n"));
+        ui->progressBar->setValue(20+i/12);
     }
 
     file.write( "int x[120][188] = {",sizeof("int x[120][188] = {"));
@@ -595,6 +598,7 @@ void MainWindow::on_pushButtonSave_clicked()
         if (i != 119)file.write( "\n",sizeof("\n"));
         else file.write( "};\n",sizeof("};\n"));
     }
+    ui->progressBar->setValue(65);
     file.write( "int y[120][188] = {",sizeof("int y[120][188] = {"));
     for (int i = 0; i < 120; i++)
     {
@@ -606,5 +610,130 @@ void MainWindow::on_pushButtonSave_clicked()
         if (i != 119)file.write( "\n",sizeof("\n"));
         else file.write( "};\n",sizeof ("};\n"));
     }
+    ui->progressBar->setValue(100);
     file.close();
+    QMessageBox msg;
+    msg.about(NULL,"INFO","The argument has been saved");
+    ui->progressBar->setValue(0);
+}
+
+void MainWindow::on_pushButtonUndistort_clicked()
+{
+    QString path = QFileDialog::getExistingDirectory(this, "choose dst File","D:\\CODE\\");
+    QDir dir(path);
+    //要判断路径是否存在
+    if(!dir.exists())
+    {
+        qDebug() << "it is not true path";
+        return ;
+    }
+    QStringList filters;
+        filters<<QString("*.jpeg")<<QString("*.jpg");
+    dir.setFilter(QDir::Files | QDir::Hidden | QDir::NoSymLinks);//实现对文件的过滤
+    dir.setSorting(QDir::Size | QDir::Reversed);//实现对文件输出的排序
+    dir.setNameFilters(filters);  //设置文件名称过滤器，只为filters格式（后缀为.jpeg等图片格式）
+
+    QFileInfoList list = dir.entryInfoList();
+    vector<Mat> imgs;
+
+    for (int i = 0; i < list.size(); ++i)
+    {
+         QFileInfo fileInfo = list.at(i);
+         QString absolute_file_path = fileInfo.absoluteFilePath();
+         imgs.push_back(imread(absolute_file_path.toStdString(),IMREAD_GRAYSCALE));
+    }
+    QMessageBox msg;
+    msg.about(NULL,"INFO",QString("%1").arg(list.size()));
+    QInputDialog log;
+    int row = log.getInt(NULL,"row","row");
+    int col = log.getInt(NULL,"col","col");
+    Size board_size = Size(row, col);  //方格标定板内角点数目（行，列）
+    vector<vector<Point2f>> imgsPoints;
+    for (unsigned long long i = 0; i < imgs.size(); i++)
+    {
+        try
+        {
+            //Mat img1 = imgs[i];
+            Mat gray1 = imgs[i];
+            //cvtColor(img1, gray1, COLOR_BGR2GRAY);
+            vector<Point2f> img1_points;
+            findChessboardCorners(gray1, board_size, img1_points);  //计算方格标定板角点
+            find4QuadCornerSubpix(gray1, img1_points, Size(5, 5));  //细化方格标定板角点坐标
+            imgsPoints.push_back(img1_points);
+        }
+        catch (exception& e)
+        {
+            imgs.erase(imgs.begin()+i);
+            i--;
+        }
+
+    }
+    msg.about(NULL,"INFO",QString("%1").arg(imgs.size()));
+    //生成棋盘格每个内角点的空间三维坐标
+    int length = log.getInt(NULL,"length","length");
+    Size squareSize = Size(length, length);  //棋盘格每个方格的真实尺寸
+    vector<vector<Point3f>> objectPoints;
+    for (unsigned long long i = 0; i < imgsPoints.size(); i++)
+    {
+        vector<Point3f> tempPointSet;
+        for (int j = 0; j < board_size.height; j++)
+        {
+            for (int k = 0; k < board_size.width; k++)
+            {
+                Point3f realPoint;
+                // 假设标定板为世界坐标系的z平面，即z=0
+                realPoint.x = j*squareSize.width;
+                realPoint.y = k*squareSize.height;
+                realPoint.z = 0;
+                tempPointSet.push_back(realPoint);
+            }
+        }
+        objectPoints.push_back(tempPointSet);
+    }
+
+    /* 初始化每幅图像中的角点数量，假定每幅图像中都可以看到完整的标定板 */
+    vector<int> point_number;
+    for (unsigned long long i = 0; i<imgsPoints.size(); i++)
+    {
+        point_number.push_back(board_size.width*board_size.height);
+    }
+
+    //图像尺寸
+    Size imageSize;
+    imageSize.width = imgs[0].cols;
+    imageSize.height = imgs[0].rows;
+
+   // Mat Matrix = Mat(3, 3, CV_32FC1, Scalar::all(0));  //摄像机内参数矩阵
+    //Mat Coeffs = Mat(1, 5, CV_32FC1, Scalar::all(0));  //摄像机的5个畸变系数：k1,k2,p1,p2,k3
+    vector<Mat> rvecs;  //每幅图像的旋转向量
+    vector<Mat> tvecs;  //每张图像的平移量
+    calibrateCamera(objectPoints, imgsPoints, imageSize, cameraMatrix, distCoeffs, rvecs, tvecs, 0);
+
+    /*cout << "相机的内参矩阵=" << endl << cameraMatrix << endl;
+    cout << "相机畸变系数" << distCoeffs << endl;*/
+    fx = cameraMatrix.at<double>(0, 0);
+    skew = cameraMatrix.at<double>(0, 1);
+    u0 = cameraMatrix.at<double>(0, 2);
+    fy = cameraMatrix.at<double>(1, 1);
+    v0 = cameraMatrix.at<double>(1, 2);
+
+    k1 = distCoeffs.at<double>(0, 0);
+    k2 = distCoeffs.at<double>(1, 0);
+    p1 = distCoeffs.at<double>(2, 0);
+    p2 = distCoeffs.at<double>(3, 0);
+    k3 = distCoeffs.at<double>(4, 0);
+
+    ui->lineEditFX->setText(QString("%1").arg(fx));
+    ui->lineEditSKEW->setText(QString("%1").arg(skew));
+    ui->lineEditOX->setText(QString("%1").arg(u0));
+    ui->lineEditFY->setText(QString("%1").arg(fy));
+    ui->lineEditOY->setText(QString("%1").arg(v0));
+    ui->lineEditK1->setText(QString("%1").arg(k1));
+    ui->lineEditK2->setText(QString("%1").arg(k2));
+    ui->lineEditP1->setText(QString("%1").arg(p1));
+    ui->lineEditP2->setText(QString("%1").arg(p2));
+    ui->lineEditK3->setText(QString("%1").arg(k3));
+
+    isChanged = true;
+    changeCont+=11;
 }

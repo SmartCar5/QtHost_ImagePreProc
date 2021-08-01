@@ -64,6 +64,7 @@ public:
     QPushButton *pushButtonLoad;
     QPushButton *pushButtonSave;
     QProgressBar *progressBar;
+    QPushButton *pushButtonUndistort;
     QMenuBar *menubar;
     QStatusBar *statusbar;
 
@@ -183,8 +184,11 @@ public:
         pushButtonSave->setGeometry(QRect(130, 30, 93, 28));
         progressBar = new QProgressBar(groupBoxActs);
         progressBar->setObjectName(QString::fromUtf8("progressBar"));
-        progressBar->setGeometry(QRect(30, 90, 191, 23));
+        progressBar->setGeometry(QRect(20, 120, 191, 23));
         progressBar->setValue(0);
+        pushButtonUndistort = new QPushButton(groupBoxActs);
+        pushButtonUndistort->setObjectName(QString::fromUtf8("pushButtonUndistort"));
+        pushButtonUndistort->setGeometry(QRect(20, 70, 201, 28));
         MainWindow->setCentralWidget(centralwidget);
         menubar = new QMenuBar(MainWindow);
         menubar->setObjectName(QString::fromUtf8("menubar"));
@@ -222,6 +226,7 @@ public:
         groupBoxActs->setTitle(QCoreApplication::translate("MainWindow", "save and load", nullptr));
         pushButtonLoad->setText(QCoreApplication::translate("MainWindow", "loadPic", nullptr));
         pushButtonSave->setText(QCoreApplication::translate("MainWindow", "saveParam", nullptr));
+        pushButtonUndistort->setText(QCoreApplication::translate("MainWindow", "load and undistort", nullptr));
     } // retranslateUi
 
 };
