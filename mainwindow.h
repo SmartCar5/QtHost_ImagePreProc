@@ -5,6 +5,8 @@
 #include "opencv.hpp"
 #include <math.h>
 #include <iostream>
+#include <QMouseEvent>
+#include <QKeyEvent>
 using namespace cv;
 
 QT_BEGIN_NAMESPACE
@@ -18,7 +20,11 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-
+    void wheelEvent(QWheelEvent *event);
+    void mousePressEvent(QMouseEvent *event);
+    void mouseMoveEvent(QMouseEvent *event);
+    void keyPressEvent(QKeyEvent *event);
+    void keyReleaseEvent(QKeyEvent *event);
 private slots:
     void reNew();
     void on_pushButtonLoad_clicked();
@@ -57,7 +63,8 @@ private slots:
 
 private:
     void showImage(Mat pic);
-
+    void undist(void);
+    void transp(void);
 private:
     Ui::MainWindow *ui;
 
@@ -65,6 +72,10 @@ private:
     bool isReverse = false;
     int changeCont = 0;
     int changeCont2 = 0;
+
+    bool mouseFlag = false;
+    bool ctrlFlag = false;
+    bool shiftFlag = false;
 
     double fx;  //x轴焦距
     double fy;  //y轴焦距
